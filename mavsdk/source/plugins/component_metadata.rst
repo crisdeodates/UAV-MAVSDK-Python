@@ -1,7 +1,7 @@
-ComponentInformation
+ComponentMetadata
 ====
 
-.. automodule:: mavsdk.component_information
+.. automodule:: mavsdk.component_metadata
     :members:
     :undoc-members:
     :show-inheritance:

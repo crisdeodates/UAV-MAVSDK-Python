@@ -2,16 +2,32 @@
 
 [![GitHub Actions Status](https://github.com/mavlink/MAVSDK-Python/workflows/Check%20and%20PyPi%20Upload/badge.svg?branch=main)](https://github.com/mavlink/MAVSDK-Python/actions/workflows/main.yml?query=branch%3Amain)
 
-This is the Python wrapper for MAVSDK.
+This is the gRPC-based Python wrapper for MAVSDK, published on PyPI as
+[`mavsdk-grpc`](https://pypi.org/project/mavsdk-grpc/) and imported as `mavsdk_grpc`.
 
 The Python wrapper is based on a gRPC client communicating with the gRPC server written in C++. To use the Python wrapper the gRPC server called "backend" needs to be running on the same system. The wrapper is essentially auto-generated from the message definitions ([proto files](https://github.com/mavlink/MAVSDK-Proto)).
+
+> ### ⚠️ Renamed from `mavsdk` to `mavsdk-grpc`
+>
+> This wrapper used to be published as `mavsdk`. That name on PyPI now refers to
+> the native MAVSDK binding, which has a **different API** and no gRPC
+> dependency — see the [migration guide](https://mavsdk.mavlink.io/main/en/python/migration.html).
+>
+> This project carries on under the `mavsdk-grpc` name, including releases
+> tracking MAVSDK v4. If you were using `mavsdk`:
+>
+> * Install `mavsdk-grpc` and use `import mavsdk_grpc as mavsdk` — the code is
+>   identical. The separate import name is deliberate, so that the two packages
+>   can never overwrite each other's files.
+> * Or pin `mavsdk<4` to freeze on the last release under the old name, which
+>   will not receive further updates.
 
 
 ## Important Notes
 
 - Python 3.7+ is required (because the wrapper is based on [asyncio](https://docs.python.org/3.7/library/asyncio.html)).
 - You may need to run `pip3` instead of `pip` and `python3` instead of `python`, depending of your system defaults.
-- Auterion has a [Getting started with MAVSDK-Python](https://auterion.com/getting-started-with-mavsdk-python/) guide if you're a beginner and not sure where to start.
+- Auterion used to have a [Getting started with MAVSDK-Python (web.archive.org)](https://web.archive.org/web/20201211155626/https://auterion.com/getting-started-with-mavsdk-python/) guide if you're a beginner and not sure where to start.
 
 ## API Reference docs
 
@@ -19,21 +35,27 @@ The Python wrapper is based on a gRPC client communicating with the gRPC server 
 
 ## Install using pip from PyPi
 
-To install mavsdk-python, simply run:
+**Note for Raspberry Pi 1/2 and Zero:**
+
+> This wrapper requires grpcio. However, there are no binary packets of grpcio for armv6 available via pip (also see [files on pypi.org](https://pypi.org/project/grpcio/#files)).
+> In this case, install grpcio via the package manager, e.g. `sudo apt-get install python3-grpcio`.
+
+
+To install it, simply run:
 
 ```sh
-pip3 install mavsdk
+pip3 install mavsdk-grpc
 ```
 
 The package contains `mavsdk_server` already (previously called "backend"), which is started automatically when connecting (e.g. `await drone.connect()`). Have a look at the examples to see it used in practice. It will be something like:
 
 ```python
-from mavsdk import System
+from mavsdk_grpc import System
 
 ...
 
 drone = System()
-await drone.connect(system_address="udp://:14540")
+await drone.connect(system_address="udpin://0.0.0.0:14540")
 ```
 
 Note: `System()` takes two named parameters: `mavsdk_server_address` and `port`. When left empty, they default to `None` and `50051`, respectively, and `mavsdk_server -p 50051` is run by `await drone.connect()`. If `mavsdk_server_address` is set (e.g. to "localhost"), then `await drone.connect()` will not start the embedded `mavsdk_server` and will try to connect to a server running at this address. This is useful for platforms where `mavsdk_server` does not come embedded, for debugging purposes, and for running `mavsdk_server` in a place different than where the MAVSDK-Python script is run.
@@ -89,6 +111,10 @@ Run the following helper script. It will generate the Python wrappers for each p
 ./other/tools/run_protoc.sh
 ```
 
+### Adding support for new plugins
+
+In case you updated the `./proto` submodule to include a new plugin, you will also have to manually edit the file `mavsdk/system.py` to register the plugin.
+
 ### Update `mavsdk_server` version
 
 [MAVSDK_SERVER_VERSION](./MAVSDK_SERVER_VERSION) contains exactly the tag name of the `mavsdk_server` release corresponding to the version of MAVSDK-Python. When the [proto](./proto) submodule is updated here, chances are that `mavsdk_server` should be updated, too. Just edit this file, and the corresponding binary will be downloaded by the `setup.py` script (see below).
@@ -119,6 +145,15 @@ pip3 install -r requirements-docs.txt
 make -C mavsdk html
 ```
 
+### Formatting checks before committing
+
+We use the following checks in [CI](.github/workflows/main.yml):
+
+```
+pipx run ruff format --check --line-length=100 examples
+pipx run ruff check --select=ASYNC,RUF006,E,F --line-length=100 examples
+pipx run codespell .
+```
 
 ### Release steps
 

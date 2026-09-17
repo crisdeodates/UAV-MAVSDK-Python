@@ -1,5 +1,13 @@
 name: Check and PyPi Upload
 
+# Tagged builds publish this project under two names: "mavsdk-grpc" (the
+# going-forward name) and "mavsdk" (the legacy name, one last time, carrying a
+# rename warning). See setup.py for how the two builds differ.
+#
+# NOTE: the token in TWINE_PASSWORD must be account-scoped for the release that
+# first creates "mavsdk-grpc" on PyPI -- a project-scoped token cannot create a
+# new project. It can be swapped back to project-scoped tokens afterwards.
+
 on:
   push:
     branches:
@@ -11,37 +19,37 @@ on:
     - '*'
 
 jobs:
-  ubuntu22:
-    name: Ubuntu 22.04 x86_64
-    runs-on: ubuntu-22.04
+  ubuntu24:
+    name: Ubuntu 24.04 x86_64
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
+          fetch-depth: 0
 
-      - name: Get tags
-        run: |
-         git fetch --tags
-         echo $?
-         git tag --list
-
-      - name: Install pip
-        run: sudo apt-get install -y python3-pip
+      - name: Install pip and pipx
+        run: sudo apt-get install -y python3-pip pipx
 
       - name: Check style
         run: |
-          python3 -m pip install pycodestyle
-          export PATH=$PATH:$HOME/.local/bin
-          pycodestyle examples/*
+          pipx run ruff format --check --line-length=100 examples
+          pipx run ruff check --select=ASYNC,RUF006,E,F --line-length=100 examples
+          pipx run ruff check --select=PERF --line-length=100 .
+          pipx run codespell .
 
       - name: Install prerequisites
         run: |
           python3 -m pip install -r requirements.txt -r requirements-dev.txt -r requirements-docs.txt
-          python3 -m pip install auditwheel twine
+          python3 -m pip install "setuptools<77" auditwheel twine
 
+      # Built twice: once as "mavsdk-grpc" (the going-forward name) and once as
+      # "mavsdk" (the legacy name, carrying a rename warning). See setup.py.
       - name: Create wheel
         run: |
-          python3 setup.py bdist_wheel
+          MAVSDK_DIST_NAME=mavsdk-grpc python3 setup.py bdist_wheel
+          rm -rf build mavsdk.egg-info
+          MAVSDK_DIST_NAME=mavsdk python3 setup.py bdist_wheel
           mkdir wheelhouse
           export PATH=$PATH:$HOME/.local/bin
           auditwheel repair --plat manylinux2014_x86_64 dist/*.whl
@@ -49,6 +57,11 @@ jobs:
       - name: Check the artifacts
         run: |
           ls -lh "wheelhouse/"
+
+      - name: Validate wheel metadata
+        run: |
+          export PATH=$PATH:$HOME/.local/bin
+          twine check wheelhouse/*.whl
 
       - name: Create docs
         run: |
@@ -63,7 +76,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         run: |
           export PATH=$PATH:$HOME/.local/bin
-          twine upload wheelhouse/*.whl
+          twine upload --skip-existing wheelhouse/*.whl
 
       - name: Upload docs
         env:
@@ -76,9 +89,9 @@ jobs:
 
 
 
-  ubuntu22-other:
-    name: Ubuntu 22.04 ${{ matrix.arch }}
-    runs-on: ubuntu-22.04
+  ubuntu24-other:
+    name: Ubuntu 24.04 ${{ matrix.arch }}
+    runs-on: ubuntu-24.04
 
     strategy:
       matrix:
@@ -91,15 +104,10 @@ jobs:
             pypi_arch: manylinux2014_aarch64
 
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
-
-      - name: Get tags
-        run: |
-         git fetch --tags
-         echo $?
-         git tag --list
+          fetch-depth: 0
 
       - name: Install pip
         run: sudo apt-get install -y python3-pip
@@ -107,18 +115,25 @@ jobs:
       - name: Install prerequisites
         run: |
           python3 -m pip install -r requirements.txt -r requirements-dev.txt
-          python3 -m pip install twine
+          python3 -m pip install "setuptools<77" twine
 
       - name: Create wheel
         run: |
           export MAVSDK_SERVER_ARCH=${{ matrix.arch }}
-          python3 setup.py bdist_wheel
+          MAVSDK_DIST_NAME=mavsdk-grpc python3 setup.py bdist_wheel
+          rm -rf build mavsdk.egg-info
+          MAVSDK_DIST_NAME=mavsdk python3 setup.py bdist_wheel
           ls dist/*any.whl | sed -e 'p;s/any/${{ matrix.pypi_arch }}/' | xargs -n2 mv
 
       - name: Check the artifacts
         run: |
           ls -lh "dist/"
 
+      - name: Validate wheel metadata
+        run: |
+          export PATH=$PATH:$HOME/.local/bin
+          twine check dist/*.whl
+
       - name: Upload to PyPi
         env:
           TWINE_USERNAME: ${{ secrets.TWINE_USERNAME }}
@@ -127,40 +142,55 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         run: |
           export PATH=$PATH:$HOME/.local/bin
-          twine upload dist/*.whl
+          twine upload --skip-existing dist/*.whl
 
   macOS:
-    name: macOS
-    runs-on: macos-12
+    name: macOS ${{ matrix.arch }}
+    runs-on: ${{ matrix.runs_on }}
+    strategy:
+      matrix:
+        include:
+          - arch: x64
+            wheel_arch: 13_0_x86_64
+            runs_on: macos-15-intel
+          - arch: arm64
+            wheel_arch: 14_0_arm64
+            runs_on: macos-15
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
+          fetch-depth: 0
 
-      - name: Get tags
-        run: |
-         git fetch --tags
-         echo $?
-         git tag --list
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: 3.x
 
       - name: Install prerequisites
         run: |
-          python3 -m pip install -r requirements.txt
-          python3 -m pip install twine wheel
-          python3 -m pip install --user delocate
+          python -m pip install -r requirements.txt
+          python -m pip install "setuptools<77" twine wheel
+          python -m pip install --user delocate
 
       - name: Create wheel
         run: |
-          python3 setup.py bdist_wheel
-          export PATH="$(python3 -m site --user-base)/bin:$PATH"
-          echo "PATH: $PATH"
+          MAVSDK_DIST_NAME=mavsdk-grpc python setup.py bdist_wheel
+          rm -rf build mavsdk.egg-info
+          MAVSDK_DIST_NAME=mavsdk python setup.py bdist_wheel
+          export PATH="$(python -m site --user-base)/bin:$PATH"
           delocate-wheel -w wheelhouse -v dist/*.whl
-          ls wheelhouse/*any.whl | sed -e 'p;s/any/macosx_10_9_x86_64/' | xargs -n2 mv
+          ls wheelhouse/*any.whl | sed -e 'p;s/any/macosx_${{ matrix.wheel_arch }}/' | xargs -n2 mv
 
       - name: Check the artifacts
         run: |
           ls -lh "wheelhouse/"
 
+      - name: Validate wheel metadata
+        run: |
+          export PATH=$PATH:$HOME/.local/bin
+          twine check wheelhouse/*.whl
+
       - name: Upload to PyPi
         env:
           TWINE_USERNAME: ${{ secrets.TWINE_USERNAME }}
@@ -169,7 +199,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         run: |
           export PATH=$PATH:$HOME/.local/bin
-          twine upload wheelhouse/*.whl
+          twine upload --skip-existing wheelhouse/*.whl
 
   Windows:
     name: Windows (${{ matrix.arch }})
@@ -179,40 +209,49 @@ jobs:
       matrix:
         include:
           - arch: x86
+            host_arch: x64
             wheel_arch: win32
           - arch: x64
+            host_arch: x64
             wheel_arch: win_amd64
+          - arch: arm64
+            host_arch: x64
+            wheel_arch: win_arm64
 
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
-
-      - name: Get tags
-        run: |
-         git fetch --tags
-         echo $?
-         git tag --list
+          fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v7
         with:
-          python-version: 3.10
-          architecture: ${{ matrix.arch }}
+          python-version: 3.x
+          architecture: ${{ matrix.host_arch }}
 
       - name: Install prerequisites
         run: |
           python3 -m pip install -r requirements.txt -r requirements-dev.txt
-          python3 -m pip install twine wheel
+          python3 -m pip install "setuptools<77" twine wheel
 
       - name: Create wheel
         run: |
+          $env:MAVSDK_SERVER_ARCH = "${{ matrix.arch }}"
+          $env:MAVSDK_DIST_NAME = "mavsdk-grpc"
+          python3 setup.py bdist_wheel
+          Remove-Item -Recurse -Force build, mavsdk.egg-info -ErrorAction SilentlyContinue
+          $env:MAVSDK_DIST_NAME = "mavsdk"
           python3 setup.py bdist_wheel
           Dir "dist/" | rename-item -NewName {$_.name -replace '-any.whl','-${{ matrix.wheel_arch }}.whl'}
 
       - name: Check the artifacts
         run: |
           ls "dist/"
+
+      - name: Validate wheel metadata
+        run: |
+          twine check dist/*.whl
 
       - name: Upload to PyPi
         env:
@@ -221,4 +260,4 @@ jobs:
           TWINE_NON_INTERACTIVE: 1
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          twine upload dist/*.whl
+          twine upload --skip-existing dist/*.whl

@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 
 import asyncio
-from mavsdk import System
+from mavsdk_grpc import System
 
 
 async def run():
     drone = System()
-    await drone.connect(system_address="udp://:14540")
+    await drone.connect(system_address="udpin://0.0.0.0:14540")
 
-    asyncio.ensure_future(print_is_armed(drone))
-    asyncio.ensure_future(print_is_in_air(drone))
+    tasks = []
+    tasks.append(asyncio.create_task(print_is_armed(drone)))
+    tasks.append(asyncio.create_task(print_is_in_air(drone)))
 
-    while True:
-        await asyncio.sleep(1)
+    # Keep the program running indefinitely
+    exit_event = asyncio.Event()
+    await exit_event.wait()
 
 
 async def print_is_armed(drone):
@@ -27,4 +29,4 @@ async def print_is_in_air(drone):
 
 if __name__ == "__main__":
     # Start the main function
-    asyncio.run(print_flight_mode())
+    asyncio.run(run())

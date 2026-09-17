@@ -1,7 +1,7 @@
-ComponentInformationServer
+Gripper
 ====
 
-.. automodule:: mavsdk.component_information_server
+.. automodule:: mavsdk.gripper
     :members:
     :undoc-members:
     :show-inheritance:

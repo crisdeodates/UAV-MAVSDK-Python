@@ -1,20 +1,24 @@
 #!/usr/bin/env python3
 
 import asyncio
-from mavsdk import System
+import logging
+
+from mavsdk_grpc import System
+
+# Enable INFO level logging by default so that INFO messages are shown
+logging.basicConfig(level=logging.INFO)
 
 
 async def run():
-
     drone = System()
-    await drone.connect(system_address="udp://:14540")
+    await drone.connect(system_address="udpin://0.0.0.0:14540")
 
     status_text_task = asyncio.ensure_future(print_status_text(drone))
 
     print("Waiting for drone to connect...")
     async for state in drone.core.connection_state():
         if state.is_connected:
-            print(f"-- Connected to drone!")
+            print("-- Connected to drone!")
             break
 
     print("Waiting for drone to have a global position estimate...")

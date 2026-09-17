@@ -1,68 +1,85 @@
 #!/usr/bin/env python3
 
 import asyncio
+import logging
 
-from mavsdk import System
-from mavsdk.mission import (MissionItem, MissionPlan)
+from mavsdk_grpc import System
+from mavsdk_grpc.mission import MissionItem, MissionPlan
+
+# Enable INFO level logging by default so that INFO messages are shown
+logging.basicConfig(level=logging.INFO)
 
 
 async def run():
     drone = System()
-    await drone.connect(system_address="udp://:14540")
+    await drone.connect(system_address="udpin://0.0.0.0:14540")
 
     print("Waiting for drone to connect...")
     async for state in drone.core.connection_state():
         if state.is_connected:
-            print(f"-- Connected to drone!")
+            print("-- Connected to drone!")
             break
 
-    print_mission_progress_task = asyncio.ensure_future(
-        print_mission_progress(drone))
+    print_mission_progress_task = asyncio.ensure_future(print_mission_progress(drone))
 
     running_tasks = [print_mission_progress_task]
-    termination_task = asyncio.ensure_future(
-        observe_is_in_air(drone, running_tasks))
+    termination_task = asyncio.ensure_future(observe_is_in_air(drone, running_tasks))
 
     mission_items = []
-    mission_items.append(MissionItem(47.398039859999997,
-                                     8.5455725400000002,
-                                     25,
-                                     10,
-                                     True,
-                                     float('nan'),
-                                     float('nan'),
-                                     MissionItem.CameraAction.NONE,
-                                     float('nan'),
-                                     float('nan'),
-                                     float('nan'),
-                                     float('nan'),
-                                     float('nan')))
-    mission_items.append(MissionItem(47.398036222362471,
-                                     8.5450146439425509,
-                                     25,
-                                     10,
-                                     True,
-                                     float('nan'),
-                                     float('nan'),
-                                     MissionItem.CameraAction.NONE,
-                                     float('nan'),
-                                     float('nan'),
-                                     float('nan'),
-                                     float('nan'),
-                                     float('nan')))
-    mission_items.append(MissionItem(47.397825620791885,
-                                     8.5450092830163271,
-                                     25,
-                                     10,
-                                     True,
-                                     float('nan'),
-                                     float('nan'),
-                                     MissionItem.CameraAction.NONE,
-                                     float('nan'),
-                                     float('nan'),
-                                     float('nan'),
-                                     float('nan'),
-                                     float('nan')))
+    mission_items.append(
+        MissionItem(
+            47.398039859999997,
+            8.5455725400000002,
+            25,
+            10,
+            True,
+            float("nan"),
+            float("nan"),
+            MissionItem.CameraAction.NONE,
+            float("nan"),
+            float("nan"),
+            float("nan"),
+            float("nan"),
+            float("nan"),
+            MissionItem.VehicleAction.NONE,
+        )
+    )
+    mission_items.append(
+        MissionItem(
+            47.398036222362471,
+            8.5450146439425509,
+            25,
+            10,
+            True,
+            float("nan"),
+            float("nan"),
+            MissionItem.CameraAction.NONE,
+            float("nan"),
+            float("nan"),
+            float("nan"),
+            float("nan"),
+            float("nan"),
+            MissionItem.VehicleAction.NONE,
+        )
+    )
+    mission_items.append(
+        MissionItem(
+            47.397825620791885,
+            8.5450092830163271,
+            25,
+            10,
+            True,
+            float("nan"),
+            float("nan"),
+            MissionItem.CameraAction.NONE,
+            float("nan"),
+            float("nan"),
+            float("nan"),
+            float("nan"),
+            float("nan"),
+            MissionItem.VehicleAction.NONE,
+        )
+    )
 
     mission_plan = MissionPlan(mission_items)
 
@@ -88,14 +105,12 @@ async def run():
 
 async def print_mission_progress(drone):
     async for mission_progress in drone.mission.mission_progress():
-        print(f"Mission progress: "
-              f"{mission_progress.current}/"
-              f"{mission_progress.total}")
+        print(f"Mission progress: {mission_progress.current}/{mission_progress.total}")
 
 
 async def observe_is_in_air(drone, running_tasks):
-    """ Monitors whether the drone is flying or not and
-    returns after landing """
+    """Monitors whether the drone is flying or not and
+    returns after landing"""
 
     was_in_air = False
 

@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 
 import asyncio
-from mavsdk import System
+import logging
+from mavsdk_grpc import System
+
+# Enable INFO level logging by default so that INFO messages are shown
+logging.basicConfig(level=logging.INFO)
 
 
 async def run():
-
     drone = System()
-    await drone.connect(system_address="udp://:14540")
+    await drone.connect(system_address="udpin://0.0.0.0:14540")
 
     print("-- Starting gyroscope calibration")
     async for progress_data in drone.calibration.calibrate_gyro():

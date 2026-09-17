@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
 
 import asyncio
-from mavsdk import System
-from mavsdk.tune import (SongElement, TuneDescription, TuneError)
+from mavsdk_grpc import System
+from mavsdk_grpc.tune import SongElement, TuneDescription
 
 
 async def run():
-
     drone = System()
-    await drone.connect(system_address="udp://:14540")
+    await drone.connect(system_address="udpin://0.0.0.0:14540")
 
     print("Waiting for drone to connect...")
     async for state in drone.core.connection_state():
         if state.is_connected:
-            print(f"-- Connected to drone!")
+            print("-- Connected to drone!")
             break
 
     song_elements = []
@@ -62,6 +61,7 @@ async def run():
     await drone.tune.play_tune(tune_description)
 
     print("Tune played")
+
 
 if __name__ == "__main__":
     # Run the asyncio loop

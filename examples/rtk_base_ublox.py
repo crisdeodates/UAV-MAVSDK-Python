@@ -2,7 +2,8 @@
 
 import asyncio
 import serial
-from mavsdk import System, rtk
+from mavsdk_grpc import System, rtk
+import base64
 
 PREAMBLE_RTCM = 0xD3
 PREAMBLE_UBX = 0xB5
@@ -31,9 +32,8 @@ class UBXParser:
         full_data += pkt + checksum
 
         if self.debug:
-            print("UBX class id {} and message id {}".format(
-                ord(ubx_class_id),
-                ord(ubx_message_id))
+            print(
+                "UBX class id {} and message id {}".format(ord(ubx_class_id), ord(ubx_message_id))
             )
 
         # The ubx message in full_data could be parsed with pyubx2.UBXReader
@@ -43,7 +43,7 @@ class UBXParser:
 class RTCMParser:
     def __init__(self):
         self.debug = True
-        self.crc_init = 0x01864cfb
+        self.crc_init = 0x01864CFB
         self._init_crc_table()
 
     def _init_crc_table(self):
@@ -84,7 +84,7 @@ class RTCMParser:
 async def run():
     # Init the drone.
     # Note that connecting directly to a drone is not very useful here.
-    # You probably want to set-up some MAVLink message routing inbetween
+    # You probably want to set-up some MAVLink message routing in-between
     # this script and the drone.
     # Good candidates for this are
     # 1. mavlink-router (https://github.com/mavlink-router/mavlink-router)
@@ -95,11 +95,14 @@ async def run():
     await drone.connect()
 
     # Start the tasks
-    asyncio.ensure_future(print_gps_info(drone))
-    asyncio.ensure_future(send_rtcm(drone))
+    _tasks = [
+        asyncio.create_task(print_gps_info(drone)),
+        asyncio.create_task(send_rtcm(drone)),
+    ]
 
-    while True:
-        await asyncio.sleep(1)
+    # Keep the program running indefinitely
+    exit_event = asyncio.Event()
+    await exit_event.wait()
 
 
 async def print_gps_info(drone):
@@ -108,7 +111,6 @@ async def print_gps_info(drone):
 
 
 async def send_rtcm(drone):
-
     # Connect to a ublox RTK base station via USB.
     # Make sure that the baudrate matches the setting on the UBlox chip.
     # If you use UART instead, you should set the correct serial device.
@@ -135,15 +137,13 @@ async def send_rtcm(drone):
                 if rtcm_correction_data is None:
                     continue
 
-                # We convert the data to a string here as the API wants it even
-                # though it should be raw bytes.
-                # This creates an odd Python string that gets decoded on the
-                # C++ server side.
-                # With MAVSDK v2, the API will change to a vector of bytes
-                # instead of this clunky string.
+                # Convert the rtcm data to a base64,
+                # In MAVSDK v3 the rtcm data is expected
+                # to be base64 encoded string .
+                base64_rtcm_data = base64.b64encode(rtcm_correction_data).decode("utf-8")
 
-                await drone.rtk.send_rtcm_data(
-                    rtk.RtcmData(str(rtcm_correction_data)))
+                # Send RTCM
+                await drone.rtk.send_rtcm_data(rtk.RtcmData(base64_rtcm_data))
 
             elif ord(preamble) == PREAMBLE_UBX:
                 ubx = ubx_parser.read_packet(ublox, preamble)
@@ -166,12 +166,13 @@ async def send_rtcm(drone):
                 # It's recommended to disable NMEA messages, so this script
                 # does not have to differentiate between 3 kinds of messages
 
-                nmea = ublox.readline()
+                # nmea = ublox.readline()
                 # print(nmea)
                 pass
 
         except Exception as e:
             print(f"Exception: {e}")
+
 
 if __name__ == "__main__":
     # Start the main function

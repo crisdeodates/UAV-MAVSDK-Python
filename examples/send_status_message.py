@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 import asyncio
-from mavsdk import System
-from mavsdk.server_utility import StatusTextType
+from mavsdk_grpc import System
+from mavsdk_grpc.server_utility import StatusTextType
 
 """
 This example shows how to use server_utility plugin to send status messages.
@@ -17,17 +17,16 @@ other messages in QGroundControll interface.
 
 
 async def run():
-
     drone = System(sysid=1)
-    await drone.connect(system_address="udp://:14540")
+    await drone.connect(system_address="udpin://0.0.0.0:14540")
 
     print("Waiting for drone to connect...")
     async for state in drone.core.connection_state():
         if state.is_connected:
-            print(f"-- Connected to drone!")
-            await drone.server_utility.send_status_text(
-                StatusTextType.INFO, "Hello world!")
+            print("-- Connected to drone!")
+            await drone.server_utility.send_status_text(StatusTextType.INFO, "Hello world!")
             break
+
 
 if __name__ == "__main__":
     # Run the asyncio loop

@@ -2,18 +2,18 @@
 
 import asyncio
 
-from mavsdk import System
-from mavsdk.failure import FailureType, FailureUnit
+from mavsdk_grpc import System
+from mavsdk_grpc.failure import FailureType, FailureUnit
 
 
 async def run():
     drone = System()
-    await drone.connect(system_address="udp://:14540")
+    await drone.connect(system_address="udpin://0.0.0.0:14540")
 
     print("Waiting for drone to connect...")
     async for state in drone.core.connection_state():
         if state.is_connected:
-            print(f"-- Connected to drone!")
+            print("-- Connected to drone!")
             break
 
     print("Waiting for drone to have a global position estimate...")
@@ -23,7 +23,7 @@ async def run():
             break
 
     print("-- Enabling failure injection")
-    await drone.param.set_param_int('SYS_FAILURE_EN', 1)
+    await drone.param.set_param_int("SYS_FAILURE_EN", 1)
 
     print("-- Arming")
     await drone.action.arm()
@@ -51,14 +51,14 @@ async def run():
     await asyncio.sleep(5)
 
     print("-- Injecting GPS failure")
-    await drone.failure.inject(
-        FailureUnit.SENSOR_GPS, FailureType.OFF, instance=0)
+    await drone.failure.inject(FailureUnit.SENSOR_GPS, FailureType.OFF, instance=0)
 
     print("-- Waiting 20s before exiting script...")
     await asyncio.sleep(20)
 
     print("-- Disabling failure injection")
-    await drone.param.set_param_int('SYS_FAILURE_EN', 0)
+    await drone.param.set_param_int("SYS_FAILURE_EN", 0)
+
 
 if __name__ == "__main__":
     # Run the asyncio loop
